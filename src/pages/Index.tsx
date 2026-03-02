@@ -1,11 +1,23 @@
 import { PhoneInput } from "@/components/PhoneInput";
+import { Keypad } from "@/components/Keypad";
 import { CallButton } from "@/components/CallButton";
 import { CallStatusDisplay } from "@/components/CallStatus";
 import { CallHistory } from "@/components/CallHistory";
 import { useCall } from "@/hooks/useCall";
-import { Phone } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { Phone, LogOut } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 
 const Index = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) navigate("/login");
+  }, [user, navigate]);
+
   const {
     phoneNumber,
     setPhoneNumber,
@@ -19,35 +31,61 @@ const Index = () => {
 
   const isActive = ["calling", "ringing", "connected"].includes(status);
 
+  const handleDigit = (digit: string) => {
+    if (digit === "0" && phoneNumber === "") {
+      setPhoneNumber("+");
+    } else {
+      setPhoneNumber(phoneNumber + digit);
+    }
+  };
+
+  const handleDelete = () => {
+    setPhoneNumber(phoneNumber.slice(0, -1));
+  };
+
+  if (!user) return null;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b border-border px-4 py-4">
-        <div className="max-w-lg mx-auto flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Phone className="h-4.5 w-4.5 text-primary" />
+        <div className="max-w-lg mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Phone className="h-4.5 w-4.5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-base font-bold tracking-tight">VoiceLink</h1>
+              <p className="text-xs text-muted-foreground">Hi, {user.name}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight">VoiceLink</h1>
-            <p className="text-xs text-muted-foreground">Internet → GSM Voice Calls</p>
-          </div>
+          <Button variant="ghost" size="icon" onClick={() => { logout(); navigate("/login"); }}>
+            <LogOut className="h-4 w-4 text-muted-foreground" />
+          </Button>
         </div>
       </header>
 
       {/* Main */}
-      <main className="flex-1 px-4 py-8">
-        <div className="max-w-lg mx-auto space-y-6">
+      <main className="flex-1 px-4 py-6">
+        <div className="max-w-lg mx-auto space-y-5">
           {/* Dialer Card */}
-          <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
+          <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
             <CallStatusDisplay status={status} duration={duration} phoneNumber={phoneNumber} />
 
             {!isActive && (
-              <PhoneInput
-                value={phoneNumber}
-                onChange={setPhoneNumber}
-                disabled={isActive}
-                status={status}
-              />
+              <>
+                <PhoneInput
+                  value={phoneNumber}
+                  onChange={setPhoneNumber}
+                  disabled={isActive}
+                  status={status}
+                />
+                <Keypad
+                  onDigit={handleDigit}
+                  onDelete={handleDelete}
+                  disabled={isActive}
+                />
+              </>
             )}
 
             <CallButton
@@ -59,7 +97,7 @@ const Index = () => {
           </div>
 
           {/* History */}
-          <div className="bg-card border border-border rounded-2xl p-6">
+          <div className="bg-card border border-border rounded-2xl p-5">
             <CallHistory history={callHistory} onClear={clearHistory} />
           </div>
         </div>
