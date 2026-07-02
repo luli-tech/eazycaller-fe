@@ -1,6 +1,7 @@
 # EazyCaller Frontend
 
 React/Vite dialer UI for EazyCaller. The app provides mock login, a phone keypad, call status display, and server-backed call history.
+Calls use the Twilio Voice JavaScript SDK, so the browser asks for microphone permission when a call starts.
 
 ## Tech Stack
 

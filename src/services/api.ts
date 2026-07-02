@@ -20,6 +20,11 @@ export interface ApiCallStatus {
   cost: number;
 }
 
+export interface VoiceTokenResponse {
+  token: string;
+  identity: string;
+}
+
 function headers(userId: string): HeadersInit {
   return {
     "Content-Type": "application/json",
@@ -74,6 +79,14 @@ export async function endCall(
 
 export async function listCalls(userId: string): Promise<ApiCallRecord[]> {
   const res = await fetch(`${API_BASE}/calls`, {
+    headers: headers(userId),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return res.json();
+}
+
+export async function getVoiceToken(userId: string): Promise<VoiceTokenResponse> {
+  const res = await fetch(`${API_BASE}/voice/token`, {
     headers: headers(userId),
   });
   if (!res.ok) throw new Error(await readError(res));

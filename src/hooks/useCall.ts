@@ -1,10 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { Call as TwilioCall, Device } from "@twilio/voice-sdk";
 import { CallStatus, CallRecord } from "@/types/call";
 import {
   ApiCallRecord,
-  endCall as endBackendCall,
-  getCallStatus,
-  initiateCall as initiateBackendCall,
+  getVoiceToken,
   listCalls,
   mapProviderStatus,
 } from "@/services/api";
@@ -21,9 +20,23 @@ function toCallRecord(call: ApiCallRecord): CallRecord {
     phoneNumber: call.destination_number,
     date: call.created_at,
     duration: call.duration ?? 0,
-    status: mappedStatus === "failed" ? "failed" : mappedStatus === "ended" ? "ended" : "connected",
+    status:
+      mappedStatus === "failed"
+        ? "failed"
+        : mappedStatus === "ended"
+          ? "ended"
+          : "connected",
     cost: call.cost,
   };
+}
+
+async function requestMicrophoneAccess() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("This browser does not support microphone calling");
+  }
+
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  stream.getTracks().forEach((track) => track.stop());
 }
 
 export function useCall(userId?: string) {
@@ -33,9 +46,10 @@ export function useCall(userId?: string) {
   const [duration, setDuration] = useState(0);
   const [error, setError] = useState("");
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
-  const callStartRef = useRef<Date | null>(null);
-  const activeCallIdRef = useRef<string | null>(null);
+  const deviceRef = useRef<Device | null>(null);
+  const activeCallRef = useRef<TwilioCall | null>(null);
+  const activeStartedAtRef = useRef<Date | null>(null);
+  const durationRef = useRef(0);
 
   useEffect(() => {
     if (!userId) return;
@@ -50,29 +64,25 @@ export function useCall(userId?: string) {
   }, [userId]);
 
   useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
+
+  useEffect(() => {
     if (status === "connected") {
-      callStartRef.current = new Date();
+      activeStartedAtRef.current = new Date();
       setDuration(0);
       timerRef.current = setInterval(() => {
         setDuration((d) => d + 1);
       }, 1000);
-    } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+    } else if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [status]);
-
-  const stopPolling = useCallback(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }, []);
 
   const upsertHistory = useCallback((record: CallRecord) => {
     setCallHistory((prev) => {
@@ -82,10 +92,9 @@ export function useCall(userId?: string) {
   }, []);
 
   const addLocalHistory = useCallback(
-    (finalStatus: "connected" | "failed" | "ended", finalDuration: number, callId?: string) => {
+    (finalStatus: "connected" | "failed" | "ended", finalDuration: number) => {
       const record: CallRecord = {
-        id: callId ?? crypto.randomUUID(),
-        callId,
+        id: crypto.randomUUID(),
         phoneNumber,
         date: new Date().toISOString(),
         duration: finalDuration,
@@ -96,28 +105,23 @@ export function useCall(userId?: string) {
     [phoneNumber, upsertHistory]
   );
 
-  const refreshActiveStatus = useCallback(async () => {
-    if (!userId || !activeCallIdRef.current) return;
+  const getDevice = useCallback(async () => {
+    if (!userId) throw new Error("Sign in before calling");
+    if (deviceRef.current) return deviceRef.current;
 
-    const current = await getCallStatus(activeCallIdRef.current, userId);
-    const mappedStatus = mapProviderStatus(current.status);
-    setStatus(mappedStatus);
+    const { token } = await getVoiceToken(userId);
+    const device = new Device(token, {
+      closeProtection: true,
+    });
 
-    if (current.duration !== null) {
-      setDuration(current.duration);
-    }
+    device.on("error", (twilioError) => {
+      setError(twilioError.message || "Twilio Voice device error");
+      setStatus("failed");
+    });
 
-    if (mappedStatus === "ended" || mappedStatus === "failed") {
-      stopPolling();
-      addLocalHistory(
-        mappedStatus,
-        current.duration ?? duration,
-        current.call_id
-      );
-      activeCallIdRef.current = null;
-      setTimeout(() => setStatus("idle"), 2000);
-    }
-  }, [addLocalHistory, duration, stopPolling, userId]);
+    deviceRef.current = device;
+    return device;
+  }, [userId]);
 
   const initiateCall = useCallback(async () => {
     if (!phoneNumber || status !== "idle" || !userId) return;
@@ -127,47 +131,74 @@ export function useCall(userId?: string) {
     setDuration(0);
 
     try {
-      const response = await initiateBackendCall(normalizePhoneNumber(phoneNumber), userId);
-      activeCallIdRef.current = response.call_id;
-      setStatus(mapProviderStatus(response.status));
-      stopPolling();
-      pollRef.current = setInterval(() => {
-        refreshActiveStatus().catch((err) => {
-          setError(err instanceof Error ? err.message : "Unable to refresh call status");
-          stopPolling();
-          setStatus("failed");
-        });
-      }, 2000);
+      await requestMicrophoneAccess();
+      const device = await getDevice();
+      const call = await device.connect({
+        params: { To: normalizePhoneNumber(phoneNumber) },
+      });
+
+      activeCallRef.current = call;
+
+      call.on("ringing", () => {
+        setStatus("ringing");
+      });
+
+      call.on("accept", () => {
+        setStatus("connected");
+      });
+
+      call.on("disconnect", () => {
+        const finalDuration = durationRef.current;
+        activeCallRef.current = null;
+        addLocalHistory("ended", finalDuration);
+        setStatus("ended");
+        setTimeout(() => setStatus("idle"), 2000);
+      });
+
+      call.on("cancel", () => {
+        activeCallRef.current = null;
+        addLocalHistory("failed", 0);
+        setStatus("failed");
+        setTimeout(() => setStatus("idle"), 3000);
+      });
+
+      call.on("reject", () => {
+        activeCallRef.current = null;
+        addLocalHistory("failed", 0);
+        setStatus("failed");
+        setTimeout(() => setStatus("idle"), 3000);
+      });
+
+      call.on("error", (twilioError) => {
+        setError(twilioError.message || "Call failed");
+        activeCallRef.current = null;
+        addLocalHistory("failed", durationRef.current);
+        setStatus("failed");
+        setTimeout(() => setStatus("idle"), 3000);
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to initiate call");
+      const message =
+        err instanceof Error ? err.message : "Unable to start browser call";
+      setError(message);
       addLocalHistory("failed", 0);
       setStatus("failed");
       setTimeout(() => setStatus("idle"), 3000);
     }
-  }, [addLocalHistory, phoneNumber, refreshActiveStatus, status, stopPolling, userId]);
+  }, [addLocalHistory, getDevice, phoneNumber, status, userId]);
 
-  const hangUp = useCallback(async () => {
-    stopPolling();
-    const callId = activeCallIdRef.current;
+  const hangUp = useCallback(() => {
     const finalDuration = duration;
+    const activeCall = activeCallRef.current;
 
-    try {
-      if (callId && userId) {
-        const response = await endBackendCall(callId, userId);
-        addLocalHistory("ended", response.duration ?? finalDuration, callId);
-      } else {
-        addLocalHistory(status === "connected" ? "ended" : "failed", finalDuration);
-      }
-      setStatus("ended");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to end call");
-      addLocalHistory("failed", finalDuration, callId ?? undefined);
-      setStatus("failed");
-    } finally {
-      activeCallIdRef.current = null;
-      setTimeout(() => setStatus("idle"), 2000);
+    if (activeCall) {
+      activeCall.disconnect();
+      return;
     }
-  }, [addLocalHistory, duration, status, stopPolling, userId]);
+
+    addLocalHistory(status === "connected" ? "ended" : "failed", finalDuration);
+    setStatus("ended");
+    setTimeout(() => setStatus("idle"), 2000);
+  }, [addLocalHistory, duration, status]);
 
   const clearHistory = useCallback(() => {
     setCallHistory([]);
@@ -175,10 +206,11 @@ export function useCall(userId?: string) {
 
   useEffect(() => {
     return () => {
-      stopPolling();
       if (timerRef.current) clearInterval(timerRef.current);
+      if (activeCallRef.current) activeCallRef.current.disconnect();
+      if (deviceRef.current) deviceRef.current.destroy();
     };
-  }, [stopPolling]);
+  }, []);
 
   return {
     phoneNumber,
