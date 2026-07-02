@@ -144,7 +144,7 @@ export function PhoneInput({
       </div>
       {value && !isValid && (
         <p className="text-xs text-destructive">
-          Enter a valid E.164 number (e.g., {selectedCountry.dialCode}8012345678)
+          Enter the full phone number with country code (e.g., {selectedCountry.dialCode}8012345678)
         </p>
       )}
     </div>

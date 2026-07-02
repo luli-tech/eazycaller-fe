@@ -6,7 +6,7 @@ React/Vite frontend for EazyCaller. It provides mock authentication, a browser d
 
 - Lets users register or log in with mock local credentials
 - Stores the mock user in `localStorage`
-- Suggests a country code from the browser locale and prefixes phone numbers in E.164 format
+- Suggests a country code from the browser locale and prefixes phone numbers as full international numbers
 - Requests microphone access before starting browser calls
 - Fetches a Twilio Voice access token from the backend
 - Starts browser-to-phone calls with `@twilio/voice-sdk`
@@ -179,5 +179,5 @@ The repository root `make check` also runs frontend lint, build, and tests after
 - `GET /api/voice/token` fails: make sure the backend is running and the mock user is logged in.
 - Browser call cannot start: allow microphone access and use a secure context where required by the browser.
 - Twilio connection fails: confirm backend Twilio API Key and TwiML App settings are correct.
-- Phone number validation fails: use E.164 format after the country prefix, for example `+2348012345678`.
+- Phone number validation fails: enter the full phone number with country code, for example `+2348012345678`.
 - Call history looks empty: sign in with the same email used when the calls were made.
