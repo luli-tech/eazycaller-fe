@@ -122,7 +122,10 @@ export function useCall(userId?: string) {
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
           );
 
-          return merged.slice(0, 50);
+          const next = merged.slice(0, 50);
+          writeLocalHistory(userId, next);
+
+          return next;
         });
       })
       .catch((err) => {

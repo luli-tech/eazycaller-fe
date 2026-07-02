@@ -6,12 +6,13 @@ import { useCall } from "@/hooks/useCall";
 import { useAuth } from "@/hooks/useAuth";
 import { Clock, Phone, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const Index = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [dialCode, setDialCode] = useState("+234");
 
   useEffect(() => {
     if (!user) navigate("/login");
@@ -30,8 +31,8 @@ const Index = () => {
   const isActive = ["calling", "ringing", "connected"].includes(status);
 
   const handleDigit = (digit: string) => {
-    if (digit === "0" && phoneNumber === "") {
-      setPhoneNumber("+");
+    if (!phoneNumber || phoneNumber === "+") {
+      setPhoneNumber(`${dialCode}${digit}`);
     } else {
       setPhoneNumber(phoneNumber + digit);
     }
@@ -80,6 +81,7 @@ const Index = () => {
                 <PhoneInput
                   value={phoneNumber}
                   onChange={setPhoneNumber}
+                  onDialCodeChange={setDialCode}
                   disabled={isActive}
                   status={status}
                 />
