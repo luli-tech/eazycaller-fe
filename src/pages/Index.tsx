@@ -54,7 +54,7 @@ const Index = () => {
               <Phone className="h-4.5 w-4.5 text-primary" />
             </div>
             <div>
-              <h1 className="text-base font-bold tracking-tight">VoiceLink</h1>
+              <h1 className="text-base font-bold tracking-tight">EazyCaller</h1>
               <p className="text-xs text-muted-foreground">Hi, {user.name}</p>
             </div>
           </div>

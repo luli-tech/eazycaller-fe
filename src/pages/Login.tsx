@@ -33,7 +33,7 @@ const Login = () => {
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight">Welcome back</h1>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to VoiceLink</p>
+            <p className="text-sm text-muted-foreground mt-1">Sign in to EazyCaller</p>
           </div>
         </div>
 

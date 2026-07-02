@@ -125,7 +125,7 @@ The value is the email from mock login or registration.
 History is stored per mock user in `localStorage`:
 
 ```text
-voicelink:call-history:<userId>
+eazycaller:call-history:<userId>
 ```
 
 When the hook loads, it:

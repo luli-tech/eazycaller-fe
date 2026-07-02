@@ -71,7 +71,7 @@ function formatCallError(err: unknown, fallback: string): string {
 }
 
 function historyStorageKey(userId: string) {
-  return `voicelink:call-history:${userId}`;
+  return `eazycaller:call-history:${userId}`;
 }
 
 function readLocalHistory(userId: string): CallRecord[] {
