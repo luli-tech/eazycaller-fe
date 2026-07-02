@@ -39,6 +39,37 @@ async function requestMicrophoneAccess() {
   stream.getTracks().forEach((track) => track.stop());
 }
 
+function formatCallError(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+
+  if (typeof err === "object" && err !== null) {
+    const maybeTwilioError = err as {
+      code?: string | number;
+      message?: string;
+      description?: string;
+      explanation?: string;
+    };
+    const message =
+      maybeTwilioError.description ??
+      maybeTwilioError.explanation ??
+      maybeTwilioError.message;
+
+    if (message && maybeTwilioError.code) {
+      return `${message} (${maybeTwilioError.code})`;
+    }
+
+    if (message) return message;
+  }
+
+  if (typeof err === "string" && err.trim()) {
+    return err;
+  }
+
+  return fallback;
+}
+
 export function useCall(userId?: string) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [status, setStatus] = useState<CallStatus>("idle");
@@ -115,7 +146,8 @@ export function useCall(userId?: string) {
     });
 
     device.on("error", (twilioError) => {
-      setError(twilioError.message || "Twilio Voice device error");
+      console.error("Twilio Voice device error", twilioError);
+      setError(formatCallError(twilioError, "Twilio Voice device error"));
       setStatus("failed");
     });
 
@@ -170,16 +202,16 @@ export function useCall(userId?: string) {
       });
 
       call.on("error", (twilioError) => {
-        setError(twilioError.message || "Call failed");
+        console.error("Twilio Voice call error", twilioError);
+        setError(formatCallError(twilioError, "Call failed"));
         activeCallRef.current = null;
         addLocalHistory("failed", durationRef.current);
         setStatus("failed");
         setTimeout(() => setStatus("idle"), 3000);
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unable to start browser call";
-      setError(message);
+      console.error("Unable to start browser call", err);
+      setError(formatCallError(err, "Unable to start browser call"));
       addLocalHistory("failed", 0);
       setStatus("failed");
       setTimeout(() => setStatus("idle"), 3000);
