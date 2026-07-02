@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Phone, Mail, Lock, ArrowRight } from "lucide-react";
+import { Phone, Mail, Lock, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,6 +9,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -19,11 +20,14 @@ const Login = () => {
       setError("Please fill in all fields");
       return;
     }
+    setIsSubmitting(true);
     try {
       await login(email, password);
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to sign in");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -50,6 +54,7 @@ const Login = () => {
                 type="email"
                 placeholder="Email address"
                 value={email}
+                disabled={isSubmitting}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-10 h-12 bg-secondary border-border"
               />
@@ -60,6 +65,7 @@ const Login = () => {
                 type="password"
                 placeholder="Password"
                 value={password}
+                disabled={isSubmitting}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-10 h-12 bg-secondary border-border"
               />
@@ -70,9 +76,17 @@ const Login = () => {
             <p className="text-xs text-destructive text-center">{error}</p>
           )}
 
-          <Button type="submit" className="w-full h-12 text-sm font-semibold gap-2">
-            Sign In
-            <ArrowRight className="h-4 w-4" />
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full h-12 text-sm font-semibold gap-2"
+          >
+            {isSubmitting ? "Signing in" : "Sign In"}
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowRight className="h-4 w-4" />
+            )}
           </Button>
         </form>
 

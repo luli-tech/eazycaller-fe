@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { Phone, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Phone, Mail, Lock, User, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
@@ -11,6 +11,7 @@ const Register = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
@@ -29,11 +30,14 @@ const Register = () => {
       setError("Passwords do not match");
       return;
     }
+    setIsSubmitting(true);
     try {
       await register(email, password, name);
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to create account");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -60,6 +64,7 @@ const Register = () => {
                 type="text"
                 placeholder="Full name"
                 value={name}
+                disabled={isSubmitting}
                 onChange={(e) => setName(e.target.value)}
                 className="pl-10 h-12 bg-secondary border-border"
               />
@@ -70,6 +75,7 @@ const Register = () => {
                 type="email"
                 placeholder="Email address"
                 value={email}
+                disabled={isSubmitting}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-10 h-12 bg-secondary border-border"
               />
@@ -80,6 +86,7 @@ const Register = () => {
                 type="password"
                 placeholder="Password"
                 value={password}
+                disabled={isSubmitting}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-10 h-12 bg-secondary border-border"
               />
@@ -90,6 +97,7 @@ const Register = () => {
                 type="password"
                 placeholder="Confirm password"
                 value={confirmPassword}
+                disabled={isSubmitting}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="pl-10 h-12 bg-secondary border-border"
               />
@@ -100,9 +108,17 @@ const Register = () => {
             <p className="text-xs text-destructive text-center">{error}</p>
           )}
 
-          <Button type="submit" className="w-full h-12 text-sm font-semibold gap-2">
-            Create Account
-            <ArrowRight className="h-4 w-4" />
+          <Button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full h-12 text-sm font-semibold gap-2"
+          >
+            {isSubmitting ? "Creating account" : "Create Account"}
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ArrowRight className="h-4 w-4" />
+            )}
           </Button>
         </form>
 
