@@ -27,7 +27,8 @@ const Index = () => {
     initiateCall,
     hangUp,
     clearHistory,
-  } = useCall();
+    error,
+  } = useCall(user?.email);
 
   const isActive = ["calling", "ringing", "connected"].includes(status);
 
@@ -94,6 +95,10 @@ const Index = () => {
               onCall={initiateCall}
               onHangUp={hangUp}
             />
+
+            {error && (
+              <p className="text-xs text-destructive text-center">{error}</p>
+            )}
           </div>
 
           {/* History */}

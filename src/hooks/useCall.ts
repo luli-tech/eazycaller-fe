@@ -1,42 +1,54 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { CallStatus, CallRecord } from "@/types/call";
+import {
+  ApiCallRecord,
+  endCall as endBackendCall,
+  getCallStatus,
+  initiateCall as initiateBackendCall,
+  listCalls,
+  mapProviderStatus,
+} from "@/services/api";
 
-// Simulates call flow for demo purposes since backend doesn't exist yet
-function simulateCallFlow(
-  onStatusChange: (status: CallStatus) => void,
-  shouldFail?: boolean
-): () => void {
-  const timeouts: NodeJS.Timeout[] = [];
-
-  timeouts.push(setTimeout(() => onStatusChange("ringing"), 1500));
-
-  if (shouldFail) {
-    timeouts.push(setTimeout(() => onStatusChange("failed"), 4000));
-  } else {
-    timeouts.push(setTimeout(() => onStatusChange("connected"), 4000));
-  }
-
-  return () => timeouts.forEach(clearTimeout);
+function normalizePhoneNumber(value: string): string {
+  return value.replace(/[\s-]/g, "");
 }
 
-export function useCall() {
+function toCallRecord(call: ApiCallRecord): CallRecord {
+  const mappedStatus = mapProviderStatus(call.status);
+  return {
+    id: call.call_id,
+    callId: call.call_id,
+    phoneNumber: call.destination_number,
+    date: call.created_at,
+    duration: call.duration ?? 0,
+    status: mappedStatus === "failed" ? "failed" : mappedStatus === "ended" ? "ended" : "connected",
+    cost: call.cost,
+  };
+}
+
+export function useCall(userId?: string) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [status, setStatus] = useState<CallStatus>("idle");
-  const [callHistory, setCallHistory] = useState<CallRecord[]>(() => {
-    const saved = localStorage.getItem("call-history");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
   const [duration, setDuration] = useState(0);
+  const [error, setError] = useState("");
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
   const callStartRef = useRef<Date | null>(null);
+  const activeCallIdRef = useRef<string | null>(null);
 
-  // Persist history
   useEffect(() => {
-    localStorage.setItem("call-history", JSON.stringify(callHistory));
-  }, [callHistory]);
+    if (!userId) return;
 
-  // Duration timer
+    listCalls(userId)
+      .then((calls) => {
+        setCallHistory(calls.map(toCallRecord));
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Unable to load calls");
+      });
+  }, [userId]);
+
   useEffect(() => {
     if (status === "connected") {
       callStartRef.current = new Date();
@@ -55,54 +67,118 @@ export function useCall() {
     };
   }, [status]);
 
-  const addToHistory = useCallback(
-    (finalStatus: "connected" | "failed" | "ended", finalDuration: number) => {
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const upsertHistory = useCallback((record: CallRecord) => {
+    setCallHistory((prev) => {
+      const withoutCurrent = prev.filter((item) => item.id !== record.id);
+      return [record, ...withoutCurrent].slice(0, 50);
+    });
+  }, []);
+
+  const addLocalHistory = useCallback(
+    (finalStatus: "connected" | "failed" | "ended", finalDuration: number, callId?: string) => {
       const record: CallRecord = {
-        id: crypto.randomUUID(),
+        id: callId ?? crypto.randomUUID(),
+        callId,
         phoneNumber,
         date: new Date().toISOString(),
         duration: finalDuration,
         status: finalStatus,
       };
-      setCallHistory((prev) => [record, ...prev].slice(0, 50));
+      upsertHistory(record);
     },
-    [phoneNumber]
+    [phoneNumber, upsertHistory]
   );
 
-  const initiateCall = useCallback(() => {
-    if (!phoneNumber || status !== "idle") return;
+  const refreshActiveStatus = useCallback(async () => {
+    if (!userId || !activeCallIdRef.current) return;
 
+    const current = await getCallStatus(activeCallIdRef.current, userId);
+    const mappedStatus = mapProviderStatus(current.status);
+    setStatus(mappedStatus);
+
+    if (current.duration !== null) {
+      setDuration(current.duration);
+    }
+
+    if (mappedStatus === "ended" || mappedStatus === "failed") {
+      stopPolling();
+      addLocalHistory(
+        mappedStatus,
+        current.duration ?? duration,
+        current.call_id
+      );
+      activeCallIdRef.current = null;
+      setTimeout(() => setStatus("idle"), 2000);
+    }
+  }, [addLocalHistory, duration, stopPolling, userId]);
+
+  const initiateCall = useCallback(async () => {
+    if (!phoneNumber || status !== "idle" || !userId) return;
+
+    setError("");
     setStatus("calling");
     setDuration(0);
 
-    // Simulate: ~20% chance of failure for demo
-    const shouldFail = Math.random() < 0.2;
-
-    const cleanup = simulateCallFlow((newStatus) => {
-      setStatus(newStatus);
-      if (newStatus === "failed") {
-        addToHistory("failed", 0);
-        setTimeout(() => setStatus("idle"), 3000);
-      }
-    }, shouldFail);
-
-    cleanupRef.current = cleanup;
-  }, [phoneNumber, status, addToHistory]);
-
-  const hangUp = useCallback(() => {
-    if (cleanupRef.current) {
-      cleanupRef.current();
-      cleanupRef.current = null;
+    try {
+      const response = await initiateBackendCall(normalizePhoneNumber(phoneNumber), userId);
+      activeCallIdRef.current = response.call_id;
+      setStatus(mapProviderStatus(response.status));
+      stopPolling();
+      pollRef.current = setInterval(() => {
+        refreshActiveStatus().catch((err) => {
+          setError(err instanceof Error ? err.message : "Unable to refresh call status");
+          stopPolling();
+          setStatus("failed");
+        });
+      }, 2000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to initiate call");
+      addLocalHistory("failed", 0);
+      setStatus("failed");
+      setTimeout(() => setStatus("idle"), 3000);
     }
+  }, [addLocalHistory, phoneNumber, refreshActiveStatus, status, stopPolling, userId]);
+
+  const hangUp = useCallback(async () => {
+    stopPolling();
+    const callId = activeCallIdRef.current;
     const finalDuration = duration;
-    addToHistory(status === "connected" ? "ended" : "failed", finalDuration);
-    setStatus("ended");
-    setTimeout(() => setStatus("idle"), 2000);
-  }, [duration, status, addToHistory]);
+
+    try {
+      if (callId && userId) {
+        const response = await endBackendCall(callId, userId);
+        addLocalHistory("ended", response.duration ?? finalDuration, callId);
+      } else {
+        addLocalHistory(status === "connected" ? "ended" : "failed", finalDuration);
+      }
+      setStatus("ended");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to end call");
+      addLocalHistory("failed", finalDuration, callId ?? undefined);
+      setStatus("failed");
+    } finally {
+      activeCallIdRef.current = null;
+      setTimeout(() => setStatus("idle"), 2000);
+    }
+  }, [addLocalHistory, duration, status, stopPolling, userId]);
 
   const clearHistory = useCallback(() => {
     setCallHistory([]);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      stopPolling();
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [stopPolling]);
 
   return {
     phoneNumber,
@@ -110,6 +186,7 @@ export function useCall() {
     status,
     duration,
     callHistory,
+    error,
     initiateCall,
     hangUp,
     clearHistory,
