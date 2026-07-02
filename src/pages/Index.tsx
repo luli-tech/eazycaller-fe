@@ -10,13 +10,13 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const Index = () => {
-  const { user, logout } = useAuth();
+  const { user, token, isLoading, logout } = useAuth();
   const navigate = useNavigate();
   const [dialCode, setDialCode] = useState("+234");
 
   useEffect(() => {
-    if (!user) navigate("/login");
-  }, [user, navigate]);
+    if (!isLoading && !user) navigate("/login");
+  }, [isLoading, user, navigate]);
 
   const {
     phoneNumber,
@@ -26,7 +26,7 @@ const Index = () => {
     initiateCall,
     hangUp,
     error,
-  } = useCall(user?.email);
+  } = useCall(user?.id, token ?? undefined);
 
   const isActive = ["calling", "ringing", "connected"].includes(status);
 
@@ -42,7 +42,7 @@ const Index = () => {
     setPhoneNumber(phoneNumber.slice(0, -1));
   };
 
-  if (!user) return null;
+  if (isLoading || !user) return null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">

@@ -14,23 +14,27 @@ const Register = () => {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     if (!name || !email || !password || !confirmPassword) {
       setError("Please fill in all fields");
       return;
     }
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
       return;
     }
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
-    register(email, password, name);
-    navigate("/");
+    try {
+      await register(email, password, name);
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to create account");
+    }
   };
 
   return (

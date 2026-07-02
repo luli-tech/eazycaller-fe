@@ -1,11 +1,11 @@
 # EazyCaller Frontend
 
-React/Vite frontend for EazyCaller. It provides mock authentication, a browser dialer, country-code-aware phone number input, Twilio Voice SDK calling, call status display, and per-user call history.
+React/Vite frontend for EazyCaller. It provides email/password authentication, a browser dialer, country-code-aware phone number input, Twilio Voice SDK calling, call status display, and per-user call history.
 
 ## What The Frontend Does
 
-- Lets users register or log in with mock local credentials
-- Stores the mock user in `localStorage`
+- Lets users register or log in with email and password
+- Stores the signed JWT session and user profile in `localStorage`
 - Suggests a country code from the browser locale and prefixes phone numbers as full international numbers
 - Requests microphone access before starting browser calls
 - Fetches a Twilio Voice access token from the backend
@@ -93,6 +93,9 @@ VITE_API_BASE_URL=https://your-backend.example.com
 
 The frontend calls these backend endpoints:
 
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
 - `GET /api/voice/token`
 - `GET /api/calls`
 - `POST /api/call`
@@ -104,14 +107,14 @@ Current browser calling mainly uses `GET /api/voice/token`. The REST call endpoi
 App requests include:
 
 ```text
-X-User-ID: user@example.com
+Authorization: Bearer <jwt>
 ```
 
-The value is the email from mock login or registration.
+The token is returned by the login or registration endpoint.
 
 ## Call Flow
 
-1. User logs in or registers.
+1. User logs in or registers with email and password.
 2. User enters a destination number in the dialer.
 3. `PhoneInput` prefixes the number with the selected country dial code.
 4. `useCall` requests microphone permission.
@@ -122,7 +125,7 @@ The value is the email from mock login or registration.
 
 ## Call History
 
-History is stored per mock user in `localStorage`:
+History is stored per authenticated user in `localStorage`:
 
 ```text
 eazycaller:call-history:<userId>

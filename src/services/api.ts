@@ -25,10 +25,27 @@ export interface VoiceTokenResponse {
   identity: string;
 }
 
-function headers(userId: string): HeadersInit {
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
+function jsonHeaders(): HeadersInit {
   return {
     "Content-Type": "application/json",
-    "X-User-ID": userId,
+  };
+}
+
+function authHeaders(token: string): HeadersInit {
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
   };
 }
 
@@ -43,11 +60,11 @@ async function readError(res: Response): Promise<string> {
 
 export async function initiateCall(
   phoneNumber: string,
-  userId: string
+  token: string
 ): Promise<{ call_id: string; status: string }> {
   const res = await fetch(`${API_BASE}/call`, {
     method: "POST",
-    headers: headers(userId),
+    headers: authHeaders(token),
     body: JSON.stringify({ destination_number: phoneNumber }),
   });
   if (!res.ok) throw new Error(await readError(res));
@@ -56,10 +73,10 @@ export async function initiateCall(
 
 export async function getCallStatus(
   callId: string,
-  userId: string
+  token: string
 ): Promise<ApiCallStatus> {
   const res = await fetch(`${API_BASE}/call/${callId}/status`, {
-    headers: headers(userId),
+    headers: authHeaders(token),
   });
   if (!res.ok) throw new Error(await readError(res));
   return res.json();
@@ -67,27 +84,62 @@ export async function getCallStatus(
 
 export async function endCall(
   callId: string,
-  userId: string
+  token: string
 ): Promise<ApiCallStatus> {
   const res = await fetch(`${API_BASE}/call/${callId}/end`, {
     method: "POST",
-    headers: headers(userId),
+    headers: authHeaders(token),
   });
   if (!res.ok) throw new Error(await readError(res));
   return res.json();
 }
 
-export async function listCalls(userId: string): Promise<ApiCallRecord[]> {
+export async function listCalls(token: string): Promise<ApiCallRecord[]> {
   const res = await fetch(`${API_BASE}/calls`, {
-    headers: headers(userId),
+    headers: authHeaders(token),
   });
   if (!res.ok) throw new Error(await readError(res));
   return res.json();
 }
 
-export async function getVoiceToken(userId: string): Promise<VoiceTokenResponse> {
+export async function getVoiceToken(token: string): Promise<VoiceTokenResponse> {
   const res = await fetch(`${API_BASE}/voice/token`, {
-    headers: headers(userId),
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return res.json();
+}
+
+export async function loginWithPassword(
+  email: string,
+  password: string
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return res.json();
+}
+
+export async function registerWithPassword(
+  email: string,
+  password: string,
+  name: string
+): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: "POST",
+    headers: jsonHeaders(),
+    body: JSON.stringify({ email, password, name }),
+  });
+  if (!res.ok) throw new Error(await readError(res));
+  return res.json();
+}
+
+export async function getCurrentUser(token: string): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    headers: authHeaders(token),
   });
   if (!res.ok) throw new Error(await readError(res));
   return res.json();

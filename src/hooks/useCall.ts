@@ -90,7 +90,7 @@ function writeLocalHistory(userId: string, history: CallRecord[]) {
   localStorage.setItem(historyStorageKey(userId), JSON.stringify(history));
 }
 
-export function useCall(userId?: string) {
+export function useCall(userId?: string, authToken?: string) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [status, setStatus] = useState<CallStatus>("idle");
   const [callHistory, setCallHistory] = useState<CallRecord[]>([]);
@@ -103,14 +103,14 @@ export function useCall(userId?: string) {
   const durationRef = useRef(0);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !authToken) return;
 
     const localHistory = readLocalHistory(userId);
     if (localHistory.length > 0) {
       setCallHistory(localHistory);
     }
 
-    listCalls(userId)
+    listCalls(authToken)
       .then((calls) => {
         const serverHistory = calls.map(toCallRecord);
         setCallHistory((current) => {
@@ -131,7 +131,7 @@ export function useCall(userId?: string) {
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Unable to load calls");
       });
-  }, [userId]);
+  }, [authToken, userId]);
 
   useEffect(() => {
     durationRef.current = duration;
@@ -178,10 +178,10 @@ export function useCall(userId?: string) {
   );
 
   const getDevice = useCallback(async () => {
-    if (!userId) throw new Error("Sign in before calling");
+    if (!authToken) throw new Error("Sign in before calling");
     if (deviceRef.current) return deviceRef.current;
 
-    const { token } = await getVoiceToken(userId);
+    const { token } = await getVoiceToken(authToken);
     const device = new Device(token, {
       closeProtection: true,
     });
@@ -194,10 +194,10 @@ export function useCall(userId?: string) {
 
     deviceRef.current = device;
     return device;
-  }, [userId]);
+  }, [authToken]);
 
   const initiateCall = useCallback(async () => {
-    if (!phoneNumber || status !== "idle" || !userId) return;
+    if (!phoneNumber || status !== "idle" || !userId || !authToken) return;
 
     setError("");
     setStatus("calling");
@@ -257,7 +257,7 @@ export function useCall(userId?: string) {
       setStatus("failed");
       setTimeout(() => setStatus("idle"), 3000);
     }
-  }, [addLocalHistory, getDevice, phoneNumber, status, userId]);
+  }, [addLocalHistory, authToken, getDevice, phoneNumber, status, userId]);
 
   const hangUp = useCallback(() => {
     const finalDuration = duration;

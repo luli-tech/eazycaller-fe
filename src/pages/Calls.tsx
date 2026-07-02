@@ -7,15 +7,15 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const Calls = () => {
-  const { user, logout } = useAuth();
+  const { user, token, isLoading, logout } = useAuth();
   const navigate = useNavigate();
-  const { callHistory, clearHistory } = useCall(user?.email);
+  const { callHistory, clearHistory } = useCall(user?.id, token ?? undefined);
 
   useEffect(() => {
-    if (!user) navigate("/login");
-  }, [user, navigate]);
+    if (!isLoading && !user) navigate("/login");
+  }, [isLoading, user, navigate]);
 
-  if (!user) return null;
+  if (isLoading || !user) return null;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
