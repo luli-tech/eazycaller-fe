@@ -1,6 +1,6 @@
 import { CallStatus } from "@/types/call";
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "/api").replace(/\/$/, "");
 
 export interface ApiCallRecord {
   call_id: string;

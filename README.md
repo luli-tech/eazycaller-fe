@@ -26,6 +26,12 @@ npm run dev
 
 The dev server runs on `http://localhost:5173` and proxies `/api` requests to the backend on `http://localhost:8080`.
 
+Production builds use the Render backend configured in `.env.production`:
+
+```env
+VITE_API_BASE_URL=https://easzycaller-be.onrender.com
+```
+
 ## Backend Contract
 
 The frontend calls:
