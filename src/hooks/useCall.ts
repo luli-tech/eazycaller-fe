@@ -70,6 +70,26 @@ function formatCallError(err: unknown, fallback: string): string {
   return fallback;
 }
 
+function historyStorageKey(userId: string) {
+  return `voicelink:call-history:${userId}`;
+}
+
+function readLocalHistory(userId: string): CallRecord[] {
+  try {
+    const raw = localStorage.getItem(historyStorageKey(userId));
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalHistory(userId: string, history: CallRecord[]) {
+  localStorage.setItem(historyStorageKey(userId), JSON.stringify(history));
+}
+
 export function useCall(userId?: string) {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [status, setStatus] = useState<CallStatus>("idle");
@@ -85,9 +105,25 @@ export function useCall(userId?: string) {
   useEffect(() => {
     if (!userId) return;
 
+    const localHistory = readLocalHistory(userId);
+    if (localHistory.length > 0) {
+      setCallHistory(localHistory);
+    }
+
     listCalls(userId)
       .then((calls) => {
-        setCallHistory(calls.map(toCallRecord));
+        const serverHistory = calls.map(toCallRecord);
+        setCallHistory((current) => {
+          const existingIds = new Set(current.map((call) => call.id));
+          const merged = [
+            ...current,
+            ...serverHistory.filter((call) => !existingIds.has(call.id)),
+          ].sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
+
+          return merged.slice(0, 50);
+        });
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Unable to load calls");
@@ -118,9 +154,11 @@ export function useCall(userId?: string) {
   const upsertHistory = useCallback((record: CallRecord) => {
     setCallHistory((prev) => {
       const withoutCurrent = prev.filter((item) => item.id !== record.id);
-      return [record, ...withoutCurrent].slice(0, 50);
+      const next = [record, ...withoutCurrent].slice(0, 50);
+      if (userId) writeLocalHistory(userId, next);
+      return next;
     });
-  }, []);
+  }, [userId]);
 
   const addLocalHistory = useCallback(
     (finalStatus: "connected" | "failed" | "ended", finalDuration: number) => {
@@ -233,8 +271,9 @@ export function useCall(userId?: string) {
   }, [addLocalHistory, duration, status]);
 
   const clearHistory = useCallback(() => {
+    if (userId) localStorage.removeItem(historyStorageKey(userId));
     setCallHistory([]);
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     return () => {

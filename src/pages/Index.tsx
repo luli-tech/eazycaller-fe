@@ -2,10 +2,9 @@ import { PhoneInput } from "@/components/PhoneInput";
 import { Keypad } from "@/components/Keypad";
 import { CallButton } from "@/components/CallButton";
 import { CallStatusDisplay } from "@/components/CallStatus";
-import { CallHistory } from "@/components/CallHistory";
 import { useCall } from "@/hooks/useCall";
 import { useAuth } from "@/hooks/useAuth";
-import { Phone, LogOut } from "lucide-react";
+import { Clock, Phone, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -23,10 +22,8 @@ const Index = () => {
     setPhoneNumber,
     status,
     duration,
-    callHistory,
     initiateCall,
     hangUp,
-    clearHistory,
     error,
   } = useCall(user?.email);
 
@@ -60,9 +57,14 @@ const Index = () => {
               <p className="text-xs text-muted-foreground">Hi, {user.name}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={() => { logout(); navigate("/login"); }}>
-            <LogOut className="h-4 w-4 text-muted-foreground" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" onClick={() => navigate("/calls")}>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => { logout(); navigate("/login"); }}>
+              <LogOut className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -99,11 +101,6 @@ const Index = () => {
             {error && (
               <p className="text-xs text-destructive text-center">{error}</p>
             )}
-          </div>
-
-          {/* History */}
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <CallHistory history={callHistory} onClear={clearHistory} />
           </div>
         </div>
       </main>
